@@ -1,18 +1,27 @@
-using System.Runtime.Serialization;
-
 namespace sm_coding_challenge.Models
 {
-    [DataContract]
     public class PlayerModel
     {
-        [DataMember(Name = "player_id")]
         public string Id { get; set; }
-
-        [DataMember(Name = "name")]
+        public string EntryId { get; set; }
         public string Name { get; set; }
-
-        [DataMember(Name = "position")]
         public string Position { get; set; }
+        public RushingModel Rushing { get; set; }
+        public KickingModel Kicking { get; set; }
+        public PassingModel Passing { get; set; }
+        public ReceivingModel Receiving { get; set; }
+
+        public PlayerModel()
+        {
+            
+        }
+
+        public PlayerModel(string id, string entryId, string name, string position)
+        {
+            Id = id;
+            EntryId = entryId;
+            Name = name;
+            Position = position;
+        }
     }
 }
-

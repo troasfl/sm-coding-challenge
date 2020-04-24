@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using sm_coding_challenge.Models;
@@ -11,8 +12,8 @@ namespace sm_coding_challenge.Controllers
 {
     public class HomeController : Controller
     {
+        private readonly IDataProvider _dataProvider;
 
-        private IDataProvider _dataProvider;
         public HomeController(IDataProvider dataProvider)
         {
             _dataProvider = dataProvider ?? throw new ArgumentNullException(nameof(dataProvider));
@@ -23,28 +24,37 @@ namespace sm_coding_challenge.Controllers
             return View();
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="id"></param>
+        /// <returns></returns>
         [HttpGet]
-        public IActionResult Player(string id)
+        public async Task<IActionResult> Player(string id)
         {
-            return Json(_dataProvider.GetPlayerById(id));
+            return Json(await _dataProvider.GetPlayerById(id));
         }
 
         [HttpGet]
-        public IActionResult Players(string ids)
+        public async Task<IActionResult> Players(string ids)
         {
-            var idList = ids.Split(',');
-            var returnList = new List<PlayerModel>();
-            foreach (var id in idList)
+            if (string.IsNullOrEmpty(ids))
             {
-                returnList.Add(_dataProvider.GetPlayerById(id));
+                return Json(Enumerable.Empty<PlayerModel>());
             }
-            return Json(returnList);
+            var idList = ids.Split(',');
+            return Json(await _dataProvider.GetPlayersById(idList));
         }
 
         [HttpGet]
-        public IActionResult LatestPlayers(string ids)
+        public async Task<IActionResult> LatestPlayers(string ids)
         {
-            throw new NotImplementedException("Method Needs to be Implemented");
+            if (string.IsNullOrEmpty(ids))
+            {
+                return Json(Enumerable.Empty<PlayerModel>());
+            }
+            var idList = ids.Split(',');
+            return Json(await _dataProvider.GetLatestPlayersById(idList));
         }
 
         public IActionResult Error()

@@ -1,63 +1,80 @@
 using System;
-using System.Net;
-using System.Net.Http;
-using Newtonsoft.Json;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using sm_coding_challenge.Models;
 
 namespace sm_coding_challenge.Services.DataProvider
 {
     public class DataProviderImpl : IDataProvider
     {
-        public static TimeSpan Timeout = TimeSpan.FromSeconds(30);
+        private readonly string _key;
+        private readonly ILogger<DataProviderImpl> _logger;
+        private readonly IPlayersCacheRepository _playersCacheRepository;
 
-        public PlayerModel GetPlayerById(string id)
+        public DataProviderImpl(ILogger<DataProviderImpl> logger, IPlayersCacheRepository playersCacheRepository,
+            IConfiguration configuration)
         {
-            var handler = new HttpClientHandler()
+            _logger = logger;
+            _playersCacheRepository = playersCacheRepository;
+            _key = configuration["CacheKey"];
+        }
+
+        public async Task<PlayerModel> GetPlayerById(string id)
+        {
+            try
             {
-                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
-            };
-            using (var client = new HttpClient(handler))
-            {
-                client.Timeout = Timeout;
-                var response = client.GetAsync("https://gist.githubusercontent.com/RichardD012/a81e0d1730555bc0d8856d1be980c803/raw/3fe73fafadf7e5b699f056e55396282ff45a124b/basic.json").Result;
-                var stringData = response.Content.ReadAsStringAsync().Result;
-                var dataResponse = JsonConvert.DeserializeObject<DataResponseModel>(stringData, new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.Auto });
-                foreach(var player in dataResponse.Rushing)
-                {
-                    if(player.Id.Equals(id))
-                    {
-                        return player;
-                    }
-                }
-                foreach(var player in dataResponse.Passing)
-                {
-                    if(player.Id.Equals(id))
-                    {
-                        return player;
-                    }
-                }
-                foreach(var player in dataResponse.Receiving)
-                {
-                    if(player.Id.Equals(id))
-                    {
-                        return player;
-                    }
-                }
-                foreach(var player in dataResponse.Receiving)
-                {
-                    if(player.Id.Equals(id))
-                    {
-                        return player;
-                    }
-                }
-                foreach(var player in dataResponse.Kicking)
-                {
-                    if(player.Id.Equals(id))
-                    {
-                        return player;
-                    }
-                }
+                return await _playersCacheRepository.Get(id);
             }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, ex.ToString());
+            }
+
+            return null;
+        }
+
+        public async Task<PlayerModel[]> GetPlayersById(string[] idList)
+        {
+            try
+            {
+                var tasks = new List<Task<PlayerModel>>();
+
+                // cache data for each player for rushing stats
+                foreach (var player in idList)
+                    tasks.Add(GetPlayerById(player));
+                return await Task.WhenAll(tasks);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, ex.ToString());
+            }
+
+            return null;
+        }
+
+        public async Task<LatestPlayers> GetLatestPlayersById(string[] idList)
+        {
+            await Task.Delay(0);
+
+            try
+            {
+                var r = CommonCachingService.RawDataCache.Get<DataResponseModel>(_key);
+                var result = new LatestPlayers
+                {
+                    Receiving = r.Receiving,
+                    Rushing = r.Rushing,
+                    Passing = r.Passing,
+                    Kicking = r.Kicking
+                };
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, ex.ToString());
+            }
+
             return null;
         }
     }
