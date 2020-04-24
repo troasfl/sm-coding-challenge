@@ -9,6 +9,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Serialization;
 using sm_coding_challenge.Models;
 using sm_coding_challenge.Services.DataProvider;
@@ -75,7 +76,7 @@ namespace sm_coding_challenge
                 .WithMicrosoftMemoryCacheHandle("PlayersCache", new MemoryCacheOptions())
                 .Build();
 
-            services.AddSingleton<IPlayersCacheRepository>(serviceProvider => new PlayersCacheRepository(new BaseCacheManager<PlayerModel>(config)));
+            services.AddSingleton<IPlayersCacheRepository>(serviceProvider => new PlayersCacheRepository(new BaseCacheManager<PlayerModel>(config), serviceProvider.GetRequiredService<ILogger<PlayersCacheRepository>>()));
 
             CommonCachingService.RawDataCache = new BaseCacheManager<DataResponseModel>(config);
         }

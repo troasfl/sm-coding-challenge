@@ -40,7 +40,7 @@ namespace sm_coding_challenge.Controllers
             {
                 return Json(Enumerable.Empty<PlayerModel>());
             }
-            var idList = ids.Split(',');
+            var idList = ids.Split(',', StringSplitOptions.RemoveEmptyEntries);
             return Json(await _dataProvider.GetPlayersById(idList));
         }
 
@@ -51,7 +51,7 @@ namespace sm_coding_challenge.Controllers
             {
                 return Json(Enumerable.Empty<PlayerModel>());
             }
-            var idList = ids.Split(',');
+            var idList = ids.Split(',', StringSplitOptions.RemoveEmptyEntries);
             return Json(await _dataProvider.GetLatestPlayersById(idList));
         }
 

@@ -47,7 +47,6 @@ namespace sm_coding_challenge
             {
                 _logger.LogInformation("About to perform task.");
                  RefreshCache();
-
             }
             catch (Exception e)
             {
@@ -68,7 +67,6 @@ namespace sm_coding_challenge
 
             base.Dispose();
         }
-
 
         public async void RefreshCache()
         {
