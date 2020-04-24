@@ -81,7 +81,7 @@ namespace sm_coding_challenge
 
             var config = new CacheManager.Core.ConfigurationBuilder()
                 .WithMicrosoftMemoryCacheHandle("PlayersCache", new MemoryCacheOptions())
-                .WithExpiration(ExpirationMode.Absolute, TimeSpan.FromDays(7))
+                .WithExpiration(ExpirationMode.Absolute, TimeSpan.FromSeconds(7))
                 .Build();
 
             services.AddSingleton<IPlayersCacheRepository>(serviceProvider => new PlayersCacheRepository(new BaseCacheManager<PlayerModel>(config)));
@@ -92,6 +92,7 @@ namespace sm_coding_challenge
 
         private void RawDataCacheOnOnRemoveByHandle(object? sender, CacheItemRemovedEventArgs e)
         {
+            _logger.LogWarning($"Cache entry with key {e.Key} removed. Reason: {e.Reason}");
              RefreshCache();
         }
 
@@ -175,7 +176,12 @@ namespace sm_coding_challenge
                     foreach (var player in data.Receiving)
                         successListOfTasks.Add(DoCacheReceivingAsync(player));
                     await Task.WhenAll(successListOfTasks);
-                    successListOfTasks.Clear();
+
+                    _logger.LogInformation("Data loaded from api and cached.");
+                }
+                else
+                {
+                    _logger.LogWarning("No data available for cache.");
                 }
             }
             catch (Exception ex)
@@ -196,6 +202,8 @@ namespace sm_coding_challenge
             };
 
             _playersCacheRepository.Put(player.Id, playerModel);
+
+            _logger.LogInformation($"player {playerModel.Id} Rushing stats added.");
         }
         private async Task DoCacheKickingAsync(PlayerBaseKickingStatsModel player)
         {
@@ -210,6 +218,8 @@ namespace sm_coding_challenge
             };
 
             _playersCacheRepository.Put(player.Id, playerModel);
+
+            _logger.LogInformation($"player {playerModel.Id} Kicking stats added.");
         }
         private async Task DoCachePassingAsync(PlayerBasePassingStatsModel player)
         {
@@ -225,6 +235,8 @@ namespace sm_coding_challenge
             };
 
             _playersCacheRepository.Put(player.Id, playerModel);
+
+            _logger.LogInformation($"player {playerModel.Id} Passing stats added.");
         }
         private async Task DoCacheReceivingAsync(PlayerBaseReceivingStatsModel player)
         {
@@ -238,6 +250,8 @@ namespace sm_coding_challenge
             };
 
             _playersCacheRepository.Put(player.Id, playerModel);
+
+            _logger.LogInformation($"player {playerModel.Id} Receiving stats added.");
         }
     }
 }

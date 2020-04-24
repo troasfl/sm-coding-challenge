@@ -60,15 +60,18 @@ namespace sm_coding_challenge.Services.DataProvider
 
             try
             {
-                var r = CommonCachingService.RawDataCache.Get<DataResponseModel>(_key);
-                var result = new LatestPlayers
+                var dataResponseModel = CommonCachingService.RawDataCache.Get<DataResponseModel>(_key);
+                if (dataResponseModel != null)
                 {
-                    Receiving = r.Receiving,
-                    Rushing = r.Rushing,
-                    Passing = r.Passing,
-                    Kicking = r.Kicking
-                };
-                return result;
+                    var result = new LatestPlayers
+                    {
+                        Receiving = dataResponseModel.Receiving,
+                        Rushing = dataResponseModel.Rushing,
+                        Passing = dataResponseModel.Passing,
+                        Kicking = dataResponseModel.Kicking
+                    };
+                    return result;
+                }
             }
             catch (Exception ex)
             {
