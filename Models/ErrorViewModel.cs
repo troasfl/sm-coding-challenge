@@ -1,5 +1,3 @@
-using System;
-
 namespace sm_coding_challenge.Models
 {
     public class ErrorViewModel

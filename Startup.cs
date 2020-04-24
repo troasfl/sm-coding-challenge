@@ -1,12 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Net;
+﻿using System.Net;
 using System.Net.Http;
-using System.Threading;
-using System.Threading.Tasks;
 using AspNetCoreRateLimit;
 using CacheManager.Core;
-using CacheManager.Core.Internal;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -14,8 +9,6 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 using sm_coding_challenge.Models;
 using sm_coding_challenge.Services.DataProvider;
@@ -24,10 +17,6 @@ namespace sm_coding_challenge
 {
     public class Startup
     {
-        private ICustomHttpClient _client;
-        private IPlayersCacheRepository _playersCacheRepository;
-        private ILogger<Startup> _logger;
-
         public Startup(IConfiguration configuration)
         {
             Configuration = configuration;
@@ -47,8 +36,11 @@ namespace sm_coding_challenge
                 {
                     NamingStrategy = new SnakeCaseNamingStrategy()
                 };
-            }); 
-            
+            });
+
+            // hosted service that runs every 7 days to fetch and update cache
+            services.AddHostedService<DataUpdateWorker>();
+
             // needed to load configuration from appsettings.json
             services.AddOptions();
 
@@ -81,30 +73,16 @@ namespace sm_coding_challenge
 
             var config = new CacheManager.Core.ConfigurationBuilder()
                 .WithMicrosoftMemoryCacheHandle("PlayersCache", new MemoryCacheOptions())
-                .WithExpiration(ExpirationMode.Absolute, TimeSpan.FromSeconds(7))
                 .Build();
 
             services.AddSingleton<IPlayersCacheRepository>(serviceProvider => new PlayersCacheRepository(new BaseCacheManager<PlayerModel>(config)));
 
             CommonCachingService.RawDataCache = new BaseCacheManager<DataResponseModel>(config);
-            CommonCachingService.RawDataCache.OnRemoveByHandle += RawDataCacheOnOnRemoveByHandle;
-        }
-
-        private void RawDataCacheOnOnRemoveByHandle(object? sender, CacheItemRemovedEventArgs e)
-        {
-            _logger.LogWarning($"Cache entry with key {e.Key} removed. Reason: {e.Reason}");
-             RefreshCache();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env, IServiceProvider serviceProvider)
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
-            _playersCacheRepository = serviceProvider.GetRequiredService<IPlayersCacheRepository>();
-            _client = serviceProvider.GetRequiredService<ICustomHttpClient>();
-            _logger = serviceProvider.GetRequiredService<ILogger<Startup>>();
-            
-            RefreshCache();
-
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
@@ -130,128 +108,6 @@ namespace sm_coding_challenge
                     name: "default",
                     pattern: "{controller=Home}/{action=Index}/{id?}");
             });
-        }
-
-        public async void RefreshCache()
-        {
-            try
-            {
-                var key = Configuration["CacheKey"];
-                var cts = new CancellationTokenSource();
-
-                var url = Configuration["Endpoint"];
-
-                var response = await _client.MakeGetRequestAsync(url, cts.Token);
-                var stringData = await response.Content.ReadAsStringAsync();
-                var data = JsonConvert.DeserializeObject<DataResponseModel>(stringData, new JsonSerializerSettings
-                {
-                    TypeNameHandling = TypeNameHandling.Auto
-                });
-
-                if (data != null)
-                {
-                    CommonCachingService.RawDataCache.Put(key, data);
-
-                    var successListOfTasks = new List<Task>();
-
-                    // cache data for each player for rushing stats
-                    foreach (var player in data.Rushing)
-                        successListOfTasks.Add(DoCacheRushingAsync(player));
-                    await Task.WhenAll(successListOfTasks);
-                    successListOfTasks.Clear();
-
-                    // cache data for each player for kicking stats
-                    foreach (var player in data.Kicking)
-                        successListOfTasks.Add(DoCacheKickingAsync(player));
-                    await Task.WhenAll(successListOfTasks);
-                    successListOfTasks.Clear();
-
-                    // cache data for each player for passing stats
-                    foreach (var player in data.Passing)
-                        successListOfTasks.Add(DoCachePassingAsync(player));
-                    await Task.WhenAll(successListOfTasks);
-                    successListOfTasks.Clear();
-
-                    // cache data for each player for receiving stats
-                    foreach (var player in data.Receiving)
-                        successListOfTasks.Add(DoCacheReceivingAsync(player));
-                    await Task.WhenAll(successListOfTasks);
-
-                    _logger.LogInformation("Data loaded from api and cached.");
-                }
-                else
-                {
-                    _logger.LogWarning("No data available for cache.");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, ex.ToString());
-            }
-        }
-        private async Task DoCacheRushingAsync(PlayerBaseRushingStatsModel player)
-        {
-            var playerModel = await _playersCacheRepository.Get(player.Id) ?? new PlayerModel(player.Id, player.EntryId, player.Name, player.Position);
-
-            playerModel.Rushing = new RushingModel
-            {
-                Att = player.Att,
-                Fum = player.Fum,
-                Tds = player.Tds,
-                Yds = player.Yds
-            };
-
-            _playersCacheRepository.Put(player.Id, playerModel);
-
-            _logger.LogInformation($"player {playerModel.Id} Rushing stats added.");
-        }
-        private async Task DoCacheKickingAsync(PlayerBaseKickingStatsModel player)
-        {
-            var playerModel = await _playersCacheRepository.Get(player.Id) ?? new PlayerModel(player.Id, player.EntryId, player.Name, player.Position);
-
-            playerModel.Kicking = new KickingModel
-            {
-                ExtraPtAtt = player.ExtraPtAtt,
-                ExtraPtMade = player.ExtraPtMade,
-                FldGoalsAtt = player.FldGoalsAtt,
-                FldGoalsMade = player.FldGoalsMade
-            };
-
-            _playersCacheRepository.Put(player.Id, playerModel);
-
-            _logger.LogInformation($"player {playerModel.Id} Kicking stats added.");
-        }
-        private async Task DoCachePassingAsync(PlayerBasePassingStatsModel player)
-        {
-            var playerModel = await _playersCacheRepository.Get(player.Id) ?? new PlayerModel(player.Id, player.EntryId, player.Name, player.Position);
-
-            playerModel.Passing = new PassingModel
-            {
-                Tds = player.Tds,
-                Att = player.Att,
-                Cmp = player.Cmp,
-                Int = player.Int,
-                Yds = player.Yds
-            };
-
-            _playersCacheRepository.Put(player.Id, playerModel);
-
-            _logger.LogInformation($"player {playerModel.Id} Passing stats added.");
-        }
-        private async Task DoCacheReceivingAsync(PlayerBaseReceivingStatsModel player)
-        {
-            var playerModel = await _playersCacheRepository.Get(player.Id) ?? new PlayerModel(player.Id, player.EntryId, player.Name, player.Position);
-
-            playerModel.Receiving = new ReceivingModel
-            {
-                Tds = player.Tds,
-                Yds = player.Yds,
-                Rec = player.Rec
-            };
-
-            _playersCacheRepository.Put(player.Id, playerModel);
-
-            _logger.LogInformation($"player {playerModel.Id} Receiving stats added.");
         }
     }
 }
